@@ -1,0 +1,5 @@
+{
+  "start": "bin/asadmin start-domain",
+  "stop": "bin/asadmin stop-domain",
+  "deploy": "bin/asadmin deploy --echo=false --force WAR_PATH"
+}

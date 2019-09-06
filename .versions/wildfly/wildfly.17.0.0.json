@@ -1,0 +1,8 @@
+{
+  "server": "wildfly",
+  "version": "17.0.0",
+  "jee": "8",
+  "jdk": "1.8,11",
+  "link": "https://download.jboss.org/wildfly/17.0.0.Final/wildfly-17.0.0.Final.zip",
+  "dir": "wildfly-17.0.0.Final"
+}

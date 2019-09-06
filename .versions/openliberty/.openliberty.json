@@ -1,0 +1,7 @@
+{
+  "postInstall": "bin/server create javaee8 --template=javaee8",
+  "copy": "true",
+  "start": "bin/server start javaee8",
+  "stop": "bin/server stop javaee8",
+  "deploy": "cp -rf WAR_PATH SERVER_PATH/usr/servers/javaee8/dropins"
+}

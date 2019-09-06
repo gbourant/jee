@@ -1,0 +1,6 @@
+{
+  "start": "bin/startup.sh",
+  "stop": "bin/shutdown.sh",
+  "copy": "true",
+  "deploy": "cp -rf WAR_PATH SERVER_PATH/webapps"
+}

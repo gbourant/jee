@@ -1,0 +1,8 @@
+{
+  "server": "tomee",
+  "version": "7.1.1",
+  "jee": "7",
+  "jdk": "1.8,11",
+  "link": "http://www-eu.apache.org/dist/tomee/tomee-7.1.1/apache-tomee-7.1.1-plume.zip",
+  "dir": "apache-tomee-plume-7.1.1"
+}

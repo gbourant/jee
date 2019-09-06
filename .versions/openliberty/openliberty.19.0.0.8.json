@@ -1,0 +1,8 @@
+{
+  "server": "openliberty",
+  "version": "19.0.0.8",
+  "jee": "8",
+  "jdk": "1.8,11",
+  "link": "https://public.dhe.ibm.com/ibmdl/export/pub/software/openliberty/runtime/release/2019-08-13_1136/openliberty-19.0.0.8.zip",
+  "dir": "wlp"
+}

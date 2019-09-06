@@ -1,0 +1,5 @@
+{
+  "start": "bin/standalone.sh",
+  "stop": "bin/jboss-cli.sh --connect --command=:shutdown",
+  "deploy": "bin/jboss-cli.sh --connect --command=\"deploy --force WAR_PATH\""
+}

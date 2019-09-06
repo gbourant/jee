@@ -1,0 +1,482 @@
+#!/usr/bin/env bash
+
+unalias -a
+
+JEE_DIR=~/.jee
+VERSIONS="$JEE_DIR/.versions"
+STAGING="/tmp/.staging"
+SERVERS="$JEE_DIR/servers"
+CACHE="$JEE_DIR/.cache"
+START_SCRIPT="$JEE_DIR/.start"
+STOP_SCRIPT="$JEE_DIR/.stop"
+CURRENT_SERVER="$JEE_DIR/.current-server"
+CURRENT_VERSION="$JEE_DIR/.current-version"
+
+readJson(){
+    echo "$1" | tr -d '\n'
+}
+
+readJsonFile(){
+    json=$(<"$1")
+    readJson "$json"
+}
+
+parseJson()
+{
+    echo $1 | \
+    sed -e 's/[{}]/''/g' | \
+    sed -e 's/", "/'\",\"'/g' | \
+    sed -e 's/" ,"/'\",\"'/g' | \
+    sed -e 's/" , "/'\",\"'/g' | \
+    sed -e 's/","/'\"---SEPERATOR---\"'/g' | \
+    awk -F=':' -v RS='---SEPERATOR---' "\$1~/\"$2\"/ {print}" | \
+    sed -e "s/\"$2\"://" | \
+    tr -d "\n\t" | \
+    sed -e 's/\\"/"/g' | \
+    sed -e 's/\\\\/\\/g' | \
+    sed -e 's/^[ \t]*//g' | \
+    sed -e 's/^"//'  -e 's/"$//'
+}
+
+printHelp(){
+    cat << EOL
+A self-sufficient Application Server Manager
+
+Options:
+
+--build            -b build and deploy
+--install          -i install a server
+--remove           -r remove a server
+--list             -l list installed servers
+--start            -s start the current server
+--stop             -S stop the current server
+--current-server   -d sets current server
+--prune               removes everything (stop all running servers before you run this)
+--system              creates an alias to your current SHELL file (works with zsh and bash)
+--version          -v display the version
+--help             -h display this help
+EOL
+}
+
+printTable(){
+    message="# Server Version JEEV JDK\n$message"
+    echo -e "$message" | column -t -s " "
+}
+
+unzipFile(){
+    unzip -q -d $2 $1
+}
+
+generateTableRow(){
+    json="$@"
+    version=`parseJson "$json" version`
+    jee=`parseJson "$json" jee`
+    jdk=`parseJson "$json" jdk`
+    server=`parseJson "$json" server`
+    
+    [ -z ${index} ] && index=1
+    message="$message"$index". $server $version $jee $jdk\n"
+    index=$(($index + 1))
+}
+
+generateServerTable(){
+    for server in $VERSIONS/* ; do
+        for configFile in $server/*.json ; do
+            json=`readJsonFile "$configFile"`
+            generateTableRow "$json"
+        done
+    done
+}
+
+generateInstalledServers(){
+    for d in $SERVERS/* ; do
+        server="${d##*/}"
+        for s in $SERVERS/$server/* ; do
+            server_with_version="${s##*/}"
+            [ -d "$SERVERS/$server/$server_with_version" ] && json=`readJsonFile "$VERSIONS/$server/$server_with_version.json"` && generateTableRow "$json"
+        done
+    done
+}
+
+setCurrentServer(){
+    
+    readCurrentServer
+    
+    echo "current server: $current_server"
+    
+    [ -z $selection ] && exit
+    
+    generateInstalledServers
+    message=`printTable`
+    
+    checkSelection
+    
+    selected=`echo -e "$message" | sed $selection'q;d'`
+    serverName=`echo "$selected" | awk '{print $2}'`
+    version=`echo "$selected" | awk '{print $3}'`
+    
+    
+    json=`readJsonFile "$VERSIONS/$serverName/.$serverName.json"`
+    
+    start=`parseJson "$json" start`
+    stop=`parseJson "$json" stop`
+    
+    start__stop_scripts="$SERVERS/$serverName/$serverName.$version"
+    
+    echo "$start__stop_scripts/$start" > $START_SCRIPT
+    echo "$start__stop_scripts/$stop" >  $STOP_SCRIPT
+    
+    echo $serverName v.$version > $CURRENT_SERVER
+    
+    echo "change current server to $serverName v.$version"
+    
+}
+
+downloadServer(){
+    rm -rf "$STAGING/$serverPath"
+    mkdir -p "$STAGING/$serverName"
+    curl $link -o "$STAGING/$serverPath.zip"
+    mkdir -p "$CACHE/$serverName"
+    mv "$STAGING/$serverPath.zip" "$CACHE/$serverPath.zip"
+}
+
+
+readCurrentServer(){
+    [ -f $CURRENT_SERVER ] && current_server=$(<"$CURRENT_SERVER")
+}
+
+startServer(){
+    readCurrentServer
+    [ -z "$current_server" ] && echo "There isn't set any current server" && exit
+    echo "starging $current_server"
+    /usr/bin/env bash $START_SCRIPT &
+}
+
+stopServer(){
+    readCurrentServer
+    [ -z "$current_server" ] && echo "There isn't set any current server" && exit
+    echo "shutting down $current_server"
+    /usr/bin/env bash $STOP_SCRIPT &
+}
+
+
+readSelectedValues(){
+    selected=`echo -e "$message" | sed $selection'q;d'`
+    serverName=`echo "$selected" | awk '{print $2}'`
+    version=`echo "$selected" | awk '{print $3}'`
+}
+
+checkSelection(){
+    
+    total_lines=`echo -e "$message" | wc -l`
+    total_lines=$(($total_lines + -1))
+    total_message="Wrong selection.Total records are $total_lines."
+    
+    [ -z ${selection} ] || [ "$selection" -eq 0 ] || [ "$selection" -gt $total_lines ] && echo $total_message && exit 1
+    
+    selection=$(($selection + 1))
+    
+    readSelectedValues
+}
+
+removeServer(){
+    
+    generateInstalledServers
+    message=`printTable`
+    checkSelection
+    readCurrentServer
+    
+    server_to_remove="$serverName "v."$version"
+    
+    
+    if [ "$current_server" = "$server_to_remove" ]
+    then
+        rm -rf "$START_SCRIPT" "$STOP_SCRIPT" "$CURRENT_SERVER"
+    fi
+    
+    rm -rf "$SERVERS/$serverName/$serverName.$version"
+    
+    echo "removed $serverName v$version"
+}
+
+
+installServer(){
+    
+    message=`printTable`
+    
+    checkSelection
+    
+    echo "Installing $serverName server v.$version"
+    
+    serverPath="$serverName/$serverName.$version"
+    
+    json=`readJsonFile "$VERSIONS/$serverPath.json"`
+    link=`parseJson "$json" link`
+    dir=`parseJson "$json" dir`
+    
+    if [ -f "$CACHE/$serverPath.zip" ];
+    then
+        echo "Using cache"
+    else
+        echo "Downloading..."
+        downloadServer
+    fi
+    
+    zipFile="$CACHE/$serverPath.zip"
+    
+    TMP_PATH="/tmp/.jee/$serverPath"
+    rm -rf "$TMP_PATH"
+    mkdir -p "$TMP_PATH"
+    
+    unzipFile "$CACHE/$serverPath.zip" "$TMP_PATH"
+    
+    FINAL_PATH="$SERVERS/$serverPath"
+    
+    rm -rf $FINAL_PATH
+    mkdir -p $FINAL_PATH
+    
+    mv $TMP_PATH/$dir/* "$FINAL_PATH"
+    
+    rm -rf "$TMP_PATH"
+    
+    echo "Successfully installed on $FINAL_PATH"
+    readCurrentServer > /dev/null
+    
+    if [ -z "$current_server" ]
+    then
+        setCurrentServer
+    fi
+    
+    json=`readJsonFile "$VERSIONS/$serverName/.$serverName.json"`
+    postInstall=`parseJson "$json" postInstall`
+    
+    if [ ! -z "$postInstall" ]
+    then
+        $SERVERS/$serverPath/$postInstall  > /dev/null
+    fi
+}
+
+prune(){
+    echo "Deleting all script's files"
+    rm -rf "$STAGING" "$SERVERS" "$CACHE" "$START_SCRIPT" "$STOP_SCRIPT" "$CURRENT_SERVER"
+    echo "Deletion completed"
+}
+
+
+createAlias(){
+    USER_DIR="/home/$USER"
+    al="alias jee='"$USER_DIR"/.jee/jee'"
+    
+    if [[ $SHELL == *"zsh"* ]];then
+        SHELL_FILE=".zshrc"
+    elif [[ $SHELL == *"zsh"* ]]
+    then
+        SHELL_FILE=".bashrc"
+    else
+        echo "Not supported shell.Generate manually your alias: $al"
+        exit
+    fi
+    
+    SHELL_FILE="$USER_DIR/$SHELL_FILE"
+    
+    grep -qxsF "$al" "$SHELL_FILE" || echo -e "\n$al" >> "$SHELL_FILE"
+    echo "Your alias has been created.Reload your shell and execute jee."
+    
+}
+
+print_time(){
+    dt_format="+%H:%M:%S"
+    d=$(date $dt_format)
+}
+
+listenChangesBuildAndDeploy(){
+    chsum1=""
+    
+    while [[ true ]]
+    do
+        type 'md5sum' > /dev/null && md5='md5sum' || md5='md5' #macOS
+        chsum2=`find ./src -type f -exec $md5 {} \;`
+        if [[ $chsum1 != $chsum2 ]] ; then
+            tput reset
+            print_time
+            echo "[$d] compiling"
+            
+            MVN_LOGS=/tmp/.mvn.logs.$RANDOM
+            
+            start=$(date +%s)
+            mvn -B -Dmaven.test.skip=true clean package > $MVN_LOGS 2>&1
+            
+            if [[ $? = 0 ]] ; then
+                print_time
+                build_end=$(date +%s)
+                build_time=$(($build_end-$start))
+                echo "[$d] build completed in $build_time seconds"
+                
+                print_time
+                readCurrentServer
+                
+                if [[ ! -z $current_server ]] ; then
+                    serverName=`echo "$current_server" | awk '{print $1}'`
+                    version=`echo "$current_server" | awk '{print $2}'`
+                    
+                    json=`readJsonFile "$VERSIONS/$serverName/.$serverName.json"`
+                    copy=`parseJson "$json" copy`
+                    deploy=`parseJson "$json" deploy`
+                    
+                    version=${version/'v.'/''}
+                    
+                    if [ -z "$copy" ];then
+                        command="$SERVERS/$serverName/$serverName.$version/$deploy"
+                    else
+                        command=$deploy
+                    fi
+                    
+                    
+                    info=`cat $MVN_LOGS | grep "Building war:"`
+                    WAR_PATH=`echo "$info" | awk '{print $4}'`
+                    command=${command/'WAR_PATH'/$WAR_PATH}
+                    
+                    SERVER_PATH="$SERVERS/$serverName/$serverName.$version"
+                    command=${command/'SERVER_PATH'/$SERVER_PATH}
+                    
+                    server_deploy_start=$(date +%s)
+                    
+                    /usr/bin/env bash -c "${command}" > /dev/null 2>&1
+                    
+                    if [[ $? = 0 ]] ; then
+                        end=$(date +%s)
+                        elapsed=$(($end-$start))
+                        deploy_time=$(($end-$server_deploy_start))
+                        msg="[$d] deployed to $current_server in $deploy_time seconds"
+                        total_time_msg="[$d] total time $elapsed seconds"
+                        echo $msg
+                        echo $total_time_msg
+                        
+                        command -p notify-send "JEE Builder" "$(echo -e "Compile: $build_time\nDeploy : $deploy_time\nTotal  : $elapsed")" > /dev/null 2>&1
+                        
+                    else
+                        echo "[$d] failed to deploy to $current_server"
+                    fi
+                    
+                    
+                fi
+            else
+                cat $MVN_LOGS
+            fi
+            
+            chsum1=$chsum2
+        fi
+        sleep 1
+    done
+}
+
+
+createNewProject(){
+    
+    PROJECT_NAME=$1
+    
+    [ -z "${PROJECT_NAME}" ] && echo "project name can't be empty" && exit
+    [ -d "${PROJECT_NAME}" ] && echo "$PROJECT_NAME project already exists." && exit
+    
+    GROUP_ID="org"
+    ARTIFACT_ID="jee"
+    VERSION="0.0.1"
+    
+    PROJECT_TMP_PATH=/tmp/.project/$RANDOM
+    
+    mkdir -p $PROJECT_TMP_PATH/src/main/java
+    mkdir -p $PROJECT_TMP_PATH/src/main/resources
+    
+    
+    cp $JEE_DIR/.build-tools/mvn/pom.xml $PROJECT_TMP_PATH
+    cp -r $JEE_DIR/.build-tools/mvn/webapp $PROJECT_TMP_PATH/src/main/webapp
+    
+    POM_FILE=$PROJECT_TMP_PATH/pom.xml
+    
+    sed -i "s/GROUP_ID/$GROUP_ID/g" $POM_FILE
+    sed -i "s/ARTIFACT_ID/$ARTIFACT_ID/g" $POM_FILE
+    sed -i "s/PROJECT_NAME/$PROJECT_NAME/g" $POM_FILE
+    sed -i "s/VERSION/$VERSION/g" $POM_FILE
+    
+    firstLoop="true"
+    IFS=.
+    for dir in $GROUP_ID; do
+        if [ "$firstLoop" = "true" ] ; then
+            SRC_PATH="$dir"
+            firstLoop="false"
+        else
+            SRC_PATH+="/$dir"
+        fi
+        mkdir -p "$PROJECT_TMP_PATH/src/main/java/${SRC_PATH}"
+    done
+    
+    
+    for dir in $ARTIFACT_ID; do
+        SRC_PATH+="/$dir"
+        mkdir -p "$PROJECT_TMP_PATH/src/main/java/${SRC_PATH}"
+    done
+    
+    cp "${JEE_DIR}"/.build-tools/java/* "$PROJECT_TMP_PATH/src/main/java/${SRC_PATH}"
+    
+    mv "$PROJECT_TMP_PATH" "$PROJECT_NAME"
+    
+}
+
+cleanUp(){
+    rm -rf /tmp/.mvn.logs*
+}
+
+trap cleanUp EXIT
+
+
+[[ $# -lt 0 ]] || [ -z $1 ] && printHelp  && exit
+
+selection=$2
+
+key="$1"
+
+case $key in
+    -n|--new)
+        createNewProject $2
+    ;;
+    -b|--build)
+        listenChangesBuildAndDeploy
+    ;;
+    -i|--install)
+        generateServerTable
+        [ -z "$2" ] && printTable && exit
+        installServer $2
+    ;;
+    -r|--remove)
+        removeServer
+    ;;
+    -l|--list)
+        echo "Installed servers:"
+        generateInstalledServers
+        printTable
+    ;;
+    -s|--start)
+        startServer
+    ;;
+    -S|--stop)
+        stopServer
+    ;;
+    -c|--current-server)
+        setCurrentServer $2
+    ;;
+    --prune)
+        prune
+    ;;
+    -v|--version)
+        cat $CURRENT_VERSION
+    ;;
+    --system)
+        createAlias
+    ;;
+    -h|--help)
+        printHelp
+    ;;
+    *)
+        printHelp
+    ;;
+esac
