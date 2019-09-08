@@ -280,8 +280,8 @@ createAlias(){
     SHELL_FILE="$USER_DIR/$SHELL_FILE"
     
     grep -qxsF "$al" "$SHELL_FILE" || echo -e "\n$al" >> "$SHELL_FILE"
-    echo "Your alias has been created.Reload your shell and execute jee."
-    
+    echo "The alias has been created.Enjoy jee"
+    $SHELL
 }
 
 print_time(){
