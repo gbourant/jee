@@ -269,7 +269,7 @@ createAlias(){
     
     if [[ $SHELL == *"zsh"* ]];then
         SHELL_FILE=".zshrc"
-    elif [[ $SHELL == *"zsh"* ]]
+    elif [[ $SHELL == *"bash"* ]]
     then
         SHELL_FILE=".bashrc"
     else
