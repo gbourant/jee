@@ -18,4 +18,4 @@ Jee (pronounced \`g\`) is a self-sufficient Application Server Manager
 
 ## Preview video of Jee tool
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/xLg64hi4irM" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+[![Jee](https://i.ytimg.com/vi/xLg64hi4irM/hqdefault.jpg)](https://www.youtube.com/watch?v=xLg64hi4irM)
