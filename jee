@@ -422,6 +422,10 @@ createNewProject(){
     
 }
 
+update(){
+    git -C "${JEE_DIR}" pull
+}
+
 cleanUp(){
     rm -rf /tmp/.mvn.logs*
 }
@@ -472,6 +476,9 @@ case $key in
     ;;
     --system)
         createAlias
+    ;;
+    --update)
+        update
     ;;
     -h|--help)
         printHelp
