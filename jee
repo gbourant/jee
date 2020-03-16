@@ -264,8 +264,7 @@ prune(){
 
 
 createAlias(){
-    USER_DIR="/home/$USER"
-    al="alias jee='"$USER_DIR"/.jee/jee'"
+    al="alias jee='"$HOME"/.jee/jee'"
     
     if [[ $SHELL == *"zsh"* ]];then
         SHELL_FILE=".zshrc"
@@ -277,7 +276,7 @@ createAlias(){
         exit
     fi
     
-    SHELL_FILE="$USER_DIR/$SHELL_FILE"
+    SHELL_FILE="$HOME/$SHELL_FILE"
     
     grep -qxsF "$al" "$SHELL_FILE" || echo -e "\n$al" >> "$SHELL_FILE"
     echo "The alias has been created.Enjoy jee"
